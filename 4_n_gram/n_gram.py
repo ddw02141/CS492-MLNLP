@@ -76,8 +76,19 @@ def add_sentence_tokens(sentences, n):
         Then return should be
         ['<s> <s> don't put off until tomorrow </s> </s>', '<s> <s> what you can do today </s> </s>']
     """
-    raise NotImplementedError
+    new_sentences = []
+    if n>=2 : 
+        for sentence in sentences:
+            sentence = (SOS + " ") * (n-1) + sentence + (" " + EOS) * (n-1)
+            new_sentences.append(sentence)
+    
+    else :
+        for sentence in sentences:
+            sentence = (SOS + " ") + sentence + (" " + EOS)
+            new_sentences.append(sentence) 
 
+
+    return new_sentences
 
 def replace_unknown(tokens, cut_off):
     """ Replace tokens which appear (> cutoff) times in the corpus with <UNK>.
@@ -98,7 +109,22 @@ def replace_unknown(tokens, cut_off):
         Then output should be
         ['<s>', 'don't', 'put', <UNK>, <UNK>, 'tomorrow', 'what', 'you', 'can', 'do', 'today']
     """
-    raise NotImplementedError
+    fdist = nltk.probability.FreqDist()
+    for word in tokens:
+        fdist[word] += 1
+    
+    new_tokens = []        
+
+    for word in tokens:
+        if fdist.get(word) > cut_off:
+            new_tokens.append(word)
+        else:
+            new_tokens.append(UNK)
+
+    return new_tokens
+    
+
+            
 
 
 def preprocess(sentences, n, cut_off):
@@ -112,6 +138,7 @@ def preprocess(sentences, n, cut_off):
     sentences = add_sentence_tokens(sentences, n)
     tokens = ' '.join(sentences).split(' ')
     tokens = replace_unknown(tokens, cut_off)
+
     return tokens
 
 
@@ -229,7 +256,17 @@ class LanguageModel(object):
         def mask(ngram, bitmask):
             return tuple((token if flag == 1 else "<UNK>" for token, flag in zip(ngram, bitmask)))
 
-        raise NotImplementedError
+        result = mask(ngram, self.masks[-1])
+
+        for bitmask in self.masks:
+
+            masked_ngram = mask(ngram, bitmask)
+
+            if masked_ngram in self.model: 
+                result = masked_ngram
+                break
+ 
+        return result
 
     def perplexity(self, test):
         """ Calculate the perplexity of the model against a given test corpus.
@@ -247,7 +284,30 @@ class LanguageModel(object):
             6. Use math.exp, math.log, sum(), map()
             7. perplexity = exp(-1/N * sum( log prob ) )
         """
-        raise NotImplementedError
+        test_tokens = preprocess(test, self.n, 1)
+        new_model = nltk.ngrams(test_tokens, self.n)
+        
+        test_tokens_length = len(test_tokens)
+        converted_test_ngrams = list()
+        for ngram in new_model:
+            converted_ngram = self._convert_oov(ngram)
+            converted_test_ngrams.append(converted_ngram)
+        # print("converted_test_ngrams")
+        # print(converted_test_ngrams)
+
+        def get_probability(ngram):
+            return self.model.get(ngram)
+
+        result = list(map(get_probability, converted_test_ngrams))
+        sum_prob = 0
+        for a in result:
+            if(a!=0 and a!=None):
+                sum_prob += math.log(a)
+        
+        return math.exp(-sum_prob / test_tokens_length)
+
+
+
 
     def _best_candidate(self, prev, i, without=None):
         """ Choose the most likely next token given the previous (n-1) tokens.
@@ -274,8 +334,45 @@ class LanguageModel(object):
                - You have to consider the case when len(candidates) == 0
                - You also have to consider the case when prev == () or prev[-1] == "<s>"
         """
+
         without = without or []
-        raise NotImplementedError
+        without.append(UNK)
+
+
+        candidate_dict = dict()
+        for ngram, prob in self.model.items():
+
+            if ngram[:-1] == prev and ngram[-1] not in without:
+
+                candidate_dict[ngram] = prob
+                        
+                # if prev==():
+                #     if ngram[0] not in without:
+                #         candidate_dict[ngram] = prob
+                # else:
+                #     if ngram not in without:
+                #         candidate_dict[ngram] = prob
+
+
+
+        if len(candidate_dict) <= i: 
+
+            return EOS, 1 - 1e-10
+
+        
+
+        sorted_candidate = sorted(candidate_dict, key=candidate_dict.get)
+        sorted_candidate.reverse()
+
+        # print(len(sorted_candidate))
+        # print(i)
+        # print("**************************************************")
+        # print(sorted_candidate[i])
+        # print("**************************************************")
+
+        return sorted_candidate[i][-1], candidate_dict.get(sorted_candidate[i])
+
+
 
     def generate_sentences(self, num, min_len=12, max_len=24):
         """ Generate num random sentences using the language model.

@@ -11,6 +11,8 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
+from sklearn import svm
+from sklearn.feature_extraction.text import TfidfTransformer
 
 """
 
@@ -98,7 +100,25 @@ def preprocess_and_split_to_tokens(sentences):
     :return: array_like objects of array_like objects of tokens.
         e.g., [["I", "like", "apples"], ["I", "love", "python3"]]
     """
-    raise NotImplementedError
+    punct_mapping = {"_":" ", "'":" "}
+    punct = "/-'?!.,#$%\'()*+-/:;<=>@[\\]^_`{|}~" + '""“”’'
+    def clean_special_chars(text, punct, mapping):
+        for p in punct:
+            text = text.replace(p, f' {p} ')
+        for m in mapping:
+            text = text.replace(m, mapping[m])
+        return text
+
+    tokenized_sentences = []
+
+    for sentence in sentences:
+        sentence = sentence.lower()
+        modified_sentence = clean_special_chars(sentence,punct,punct_mapping)
+        tokenized_sentence = modified_sentence.split()
+        tokenized_sentences.append(tokenized_sentence)
+
+    return tokenized_sentences
+    # raise NotImplementedError
 
 
 def create_bow(sentences, vocab=None, msg_prefix="\n"):
@@ -117,13 +137,62 @@ def create_bow(sentences, vocab=None, msg_prefix="\n"):
     """
 
     tokens_per_sentence = preprocess_and_split_to_tokens(sentences)
+    my_vocab = dict()
 
     if vocab is None:
         print("{} Vocab construction".format(msg_prefix))
-        raise NotImplementedError
-
+        for sentence in tokens_per_sentence:
+            for single_vocab in sentence:
+                if single_vocab in my_vocab.keys():
+                    continue
+                if not my_vocab: # if my_vocab is empty
+                    my_vocab[single_vocab] = 0
+                else:
+                    max_value = max(my_vocab.values())
+                    max_value += 1
+                    my_vocab[single_vocab] = max_value
+        # raise NotImplementedError
     print("{} Bow construction".format(msg_prefix))
-    raise NotImplementedError
+    
+    tfidf_transformer = TfidfTransformer()
+    
+
+
+    number_of_sentences = len(tokens_per_sentence)
+
+    if vocab is None:
+        number_of_vocab = len(my_vocab)
+        array_like = [[0 for i in range(number_of_vocab)] for j in range(number_of_sentences)]
+        # print("Vocab None number_of_vocab")
+        # print(number_of_vocab)
+        for i in range(number_of_sentences):
+            sentence = tokens_per_sentence[i]
+            for single_vocab in sentence:
+                if single_vocab not in my_vocab.keys():
+                    continue
+                vocab_value = my_vocab[single_vocab]
+                array_like[i][vocab_value] = 1
+        array_like = tfidf_transformer.fit_transform(array_like).toarray()
+        return (my_vocab, array_like)
+    else:
+
+        number_of_vocab = len(vocab)
+        # print("Vocab Not None number_of_vocab")
+        # print(number_of_vocab)
+        array_like = [[0 for i in range(number_of_vocab)] for j in range(number_of_sentences)]
+
+        for i in range(number_of_sentences):
+            sentence = tokens_per_sentence[i]
+            for single_vocab in sentence:
+                if single_vocab not in vocab.keys():
+                    continue
+                vocab_value = vocab[single_vocab]
+                array_like[i][vocab_value] = 1
+        
+        array_like = tfidf_transformer.fit_transform(array_like).toarray()
+
+        return (vocab, array_like)
+        
 
 
 def run(test_xs=None, test_ys=None, num_samples=10000, verbose=True):
@@ -131,6 +200,7 @@ def run(test_xs=None, test_ys=None, num_samples=10000, verbose=True):
 
     # Data
     (train_xs, train_ys), (val_xs, val_ys) = _get_review_data(path="../data/review_10k.csv", num_samples=num_samples)
+    
     if verbose:
         print("\n[Example of xs]: [\"{}...\", \"{}...\", ...]\n[Example of ys]: [{}, {}, ...]".format(
             train_xs[0][:70], train_xs[1][:70], train_ys[0], train_ys[1]))
@@ -146,7 +216,10 @@ def run(test_xs=None, test_ys=None, num_samples=10000, verbose=True):
     # You can see hyper-parameters (train_kwargs) that can be tuned in the document below.
     #   https://scikit-learn.org/stable/modules/classes.html.
     train_kwargs = dict(verbose=1, solver="liblinear")
-    clf = LogisticRegression(**train_kwargs)
+    # clf = LogisticRegression(**train_kwargs)
+    # clf = RandomForestClassifier(n_estimators=800, max_depth=64)
+    # clf = svm.LinearSVC()
+    clf = svm.SVC(gamma='auto')
     clf.fit(train_bows, train_ys)
     assert hasattr(clf, "predict")
 
@@ -159,6 +232,30 @@ def run(test_xs=None, test_ys=None, num_samples=10000, verbose=True):
     if verbose:
         print("\n[Validation] Accuracy: {}".format(val_accuracy))
         _get_example_of_errors(val_xs, val_preds, val_ys)
+
+    # n = [100,200,400,800]
+    # depth = [16,32,64]
+    # alpha_list = [0.8]
+    # max_val_accuracy = 0
+    # for alpha in alpha_list:
+        
+    #     clf = MultinomialNB(alpha=alpha)
+    #     clf.fit(train_bows, train_ys)
+    #     assert hasattr(clf, "predict")
+
+    #     # Create bow representation of validation set
+    #     _, val_bows = create_bow(val_xs, vocab=my_vocab, msg_prefix="\n[Validation]")
+
+    #     # Evaluation
+    #     val_preds = clf.predict(val_bows)
+    #     val_accuracy = accuracy_score(val_ys, val_preds)
+    #     if max_val_accuracy < val_accuracy:
+    #         # print("n_estimator : %d max_depth : %d" %(n_estimator, max_depth))
+    #         print("alpha : ",alpha)
+    #         print("\n[Validation] Accuracy: {}".format(val_accuracy))
+    #     # if verbose:
+    #     #     print("\n[Validation] Accuracy: {}".format(val_accuracy))
+    #     #     _get_example_of_errors(val_xs, val_preds, val_ys)
 
     # Grading: Do not modify below lines.
     if test_xs is not None:

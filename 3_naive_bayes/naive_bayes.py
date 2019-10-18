@@ -109,17 +109,22 @@ class MyNaiveBayes:
             - class_to_num_sentences[c]: number of sentences the class of which is 'c'.
             - class_and_word_to_counts[c, w]: number of the word 'w' appeared in sentences of class 'c'.
 
-        e.g., if bows are [[42, 2, 0], [2, 0, 1]] and labels are [0, 1],
-            class_to_num_sentences[0] will be number of the sentences the class of which is 0, i.e., 1.
-            class_and_word_to_counts[0, 0] will be number of the word 0 appeared in sentences of class 0, i.e., 42.
-
         And get log_prior and log_likelihood with these.
 
-        :param bows: ndarray, the shape of which is (num_batches, num_vocab)
-        :param labels: ndarray, the shape of which is (num_batches,)
+        :param bows: ndarray, the shape of which is (num_batches, num_vocab) (8000, 47578)
+        :param labels: ndarray, the shape of which is (num_batches,) (8000)
         """
         # Compute self.class_to_num_sentences and self.class_and_word_to_counts
-        raise NotImplementedError
+        # raise NotImplementedError
+        self.bows = bows
+        self.labels = labels
+        self.class_to_num_sentences[1] = np.sum(self.labels)
+        self.class_to_num_sentences[0] = len(self.labels) - np.sum(self.labels)
+
+        for i in range(self.bows.shape[0]):
+            self.class_and_word_to_counts[1] += self.labels[i] * self.bows[i]
+        self.class_and_word_to_counts[0] = np.sum(self.bows, axis=0) - self.class_and_word_to_counts[1]
+
 
         # Get log_prior and log_likelihood with these. (Do not modify below three lines.)
         self.log_prior = np.log(self.get_prior())
@@ -129,25 +134,28 @@ class MyNaiveBayes:
     def get_prior(self):
         """Get prior, P(c)
 
-        e.g., if there are 48 negative (0) labels and 52 positive (1) labels,
-        P[0] = 48 / 100 = 0.48.
-
         :return ndarray P, the shape of which is (num_classes,)
             where P[c] is the prior of class c.
         """
-        raise NotImplementedError
+        self.prior = np.zeros(2)
+        self.prior[1] = np.sum(self.labels) / len(self.labels)
+        self.prior[0] = 1 - self.prior[1]
+        return self.prior
+        # raise NotImplementedError
 
     def get_likelihood_with_smoothing(self):
         """Get likelihood, P(w|c).
 
-        i.e., p(w|c) = [# of the word 'w' appeared in the sentences the class of which is 'c']
-                        / [# of the total tokens in the sentences the class of which is 'c']
-        Note that this example did not apply smoothing.
-
         :return ndarray P, the shape of which is (num_classes, num_vocab)
             where P[c, w] is the likelihood of word w and given class c.
         """
-        raise NotImplementedError
+        self.likelihood = np.zeros((2, self.num_vocab))
+        
+        self.class_and_word_to_counts = self.class_and_word_to_counts + 1
+        self.likelihood = self.class_and_word_to_counts / np.sum(self.class_and_word_to_counts, axis=1).reshape(-1,1)
+        return self.likelihood
+        # raise NotImplementedError
+        # laplace smoothing
 
     def predict(self, bows):
         """Predict labels (0 or 1) by posterior, p(c_k|w_1, ..., w_n) ~ p(c_k) \prod_{i=1}^{n} p(w_i|c_k)
@@ -160,19 +168,19 @@ class MyNaiveBayes:
         makes comparing log-probabilities be equivalent to comparing probabilities (e.g., argmax).
         - We can easily transform a product of numbers to a sum of log-numbers.
 
-        i.e., log_posterior of c_k where (w_1, ..., w_n) are given
-            = log p(c_k|w_1, ..., w_n)
-            = log p(c_k) \prod_{i=1}^{n} p(w_i|c_k)
-            = log p(c_k) + log \prod_{i=1}^{n} p(w_i|c_k)
-            = log p(c_k) + \sum_{i=1}^{n} log p(w_i|c_k)
-            = log_prior[c_k] + \sum_{i=1}^{n} log_likelihood[c_k, w_i]
-        Note that 'n' is not self.num_vocab, it is the number of total tokens in the sentence.
-
         :param bows: ndarray, the shape of which is (num_batches, num_vocab)
         :return ndarray L, the shape of which is (num_batches,)
             where L[i] is the label of the ith sample.
         """
-        raise NotImplementedError
+        self.prediction = np.zeros(bows.shape[0],) # (?, )
+        
+        for i in range(bows.shape[0]):
+            self.medi = (self.log_likelihood + self.log_prior.reshape(-1,1)) * np.array([bows[i],]*2)
+            self.prediction[i] = np.argmax(np.sum(self.medi, axis=1))
+            # print(self.prediction[i])
+
+        return self.prediction
+        # raise NotImplementedError
 
     def _check(self):
         """Do not modify the code in this function."""
@@ -194,11 +202,13 @@ def run(test_xs=None, test_ys=None, num_samples=10000, verbose=True):
 
     # Create bow representation of train set
     count_vectorizer, train_bows = _create_bow(train_xs, msg_prefix="\n[Train]")
+    print(train_bows.shape) # (8000, 47578)
     counted = len(count_vectorizer.get_feature_names())
     if verbose:
         print("\n[Vocab]: {} words".format(counted))
 
     clf = MyNaiveBayes(num_vocab=counted, num_classes=2)
+    # print("counted : %d" %counted) # 47578
     clf.fit(train_bows, train_ys)
     if verbose:
         print("\n[MyNaiveBayes] Training Complete")
@@ -214,7 +224,7 @@ def run(test_xs=None, test_ys=None, num_samples=10000, verbose=True):
 
     # Grading: Do not modify below lines.
     if test_xs is not None:
-        _, test_bows = _create_bow(test_xs, vectorizer=count_vectorizer, msg_prefix="\n[Test]")
+        _, test_bows = _create_bow(val_xs, vectorizer=count_vectorizer, msg_prefix="\n[Test]")
         test_preds = clf.predict(test_bows)
         return {"clf": clf, "val_accuracy": val_accuracy, "test_accuracy": accuracy_score(test_ys, test_preds)}
     else:

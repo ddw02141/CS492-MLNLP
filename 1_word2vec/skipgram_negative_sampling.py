@@ -162,7 +162,8 @@ class SkipGram:
         You may wonder what this function should output.
         This function should return the input to the sigmoid function.
         """
-        raise NotImplementedError
+        return W[index1, :].dot(W_prime[index2, :])
+        # raise NotImplementedError
 
     def backward(self, forwards, label):
         """
@@ -182,7 +183,8 @@ class SkipGram:
         elif forwards < - bound:
             gradient = (label - 0)
         else:
-            raise NotImplementedError
+            gradient = label - sigmoid(forwards)
+            # raise NotImplementedError
         return gradient
 
     def optimize(self, learning_rate, gradients, W, W_prime):
@@ -202,11 +204,13 @@ class SkipGram:
 
         # Update W_prime with W and grad.
         for grad, center_i, context_i in gradients:
-            raise NotImplementedError
+            # raise NotImplementedError
+            W_prime[context_i, :] = W_prime[context_i, :] + learning_rate * grad * W[center_i, :]
 
         # Update W with W_prime_original and grad.
         for grad, center_i, context_i in gradients:
-            raise NotImplementedError
+            # raise NotImplementedError
+            W[center_i, :] = W[center_i, :] + learning_rate * grad * W_prime_original[context_i, :]
 
     def subsampling(self, sample_bound, sentence):
         """
@@ -223,12 +227,20 @@ class SkipGram:
         Second argument, sample_bound, specifies threshold (t) represented in Exercise 1-2.
         When you generate a random number, you should not use built-in random.random() but numpy.random.random()
         """
+        # sample_bound = 1e-5
         sampled_word_indices = []
         for word in sentence.strip().split(' '):
             if self.vocab.word2count.get(word) is None:
                 continue
             else:
-                raise NotImplementedError
+                frequency = self.vocab.word2count.get(word)
+                p = (frequency - sample_bound) / frequency - np.sqrt(sample_bound / frequency)
+                randomVariable = np.random.random()
+                if randomVariable > (1-p):
+                    sampled_word_indices.append(self.vocab.word2index.get(word))
+                
+
+                # raise NotImplementedError
         return sampled_word_indices
 
     def train(self, input_file_name, output_file_name,
