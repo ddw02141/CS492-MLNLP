@@ -91,7 +91,7 @@ def add_sentence_tokens(sentences, n):
     return new_sentences
 
 def replace_unknown(tokens, cut_off):
-    """ Replace tokens which appear (> cutoff) times in the corpus with <UNK>.
+    """ Replace tokens which appear (<= cutoff) times in the corpus with <UNK>.
 
         :param tokens: (list of str) the tokens comprising the corpus.
         :param cut_off: (int) the bound of cutting the token.
@@ -101,13 +101,12 @@ def replace_unknown(tokens, cut_off):
         use nltk.FreqDist when you build a vocab.
 
         [Example]
-        tokens = ['<s>', 'don't', 'put', 'off', 'until', 'tomorrow', 'what', 'you', 'can', 'do', today']
-        Let's suppose counts for each words in tokens
-        'don't' - 1, 'put' - 1, 'off' - 0, 'until' - 0, 'tomorrow' - 1, 'what' - 1, 'you' - 1, 'can' - 1
-        'do' - 1, 'today' - 1
-        and cutoff = 0
+        tokens = ['<s>', 'I', 'love', 'cake', 'I', 'like', 'cake', '</s>']
+        Then, here are the counts for each words in tokens:
+        'I': 2, 'love': 1, 'cake': 2, 'like': 1
+        and cutoff = 1
         Then output should be
-        ['<s>', 'don't', 'put', <UNK>, <UNK>, 'tomorrow', 'what', 'you', 'can', 'do', 'today']
+        ['<s>', 'I', UNK, 'cake', 'I', UNK, 'cake', '</s>']
     """
     fdist = nltk.probability.FreqDist()
     for word in tokens:
@@ -233,8 +232,7 @@ class LanguageModel(object):
 
             [Hint]
             1. Use mask function I gave to you.
-            2. If the type of ngram is str then (ngram,) else ngram
-            3. Use self.masks, self.model
+            2. Use self.masks, self.model
 
             [Example]
             Let's consider a bigram case.

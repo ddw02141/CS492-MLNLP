@@ -112,3 +112,7 @@ Model perplexity: 45.623
 ```
 
 If you don't implement the code but just try to mimic answers above. You will get zero for this task.
+
+## Q&A
+
+Check a notification in KLMS.
