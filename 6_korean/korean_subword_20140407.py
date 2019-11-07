@@ -9,12 +9,14 @@ import tensorflow as tf
 from tqdm import trange
 from collections import Counter
 from collections import defaultdict
+import operator
 try:
     import sentencepiece as spm
 except ModuleNotFoundError:
     print("Please install sentencepiece")
     print("$ pip3 install sentencepiece (terminal) or !pip install sentencepiece (Colab)")
     exit()
+
 
 """
 # Korean NLP
@@ -142,11 +144,16 @@ class BytePairEncoder:
                 e.g. {"_ 이 거": 2, "_ 평 점 이": 1, "_ 왜": 1, "_ 낮 음 ?":1, "_ 마 지 막":1, "_ 반 전":1}
             : return: defaultdict(<class 'int'>, (dict))
                 e.g. {('_', '이'): 2, ('이', 거'): 2, ('_', '평': 1, ('평', '점'): 1, ('점', '이'): 1,
-                      ('_', '왜'): 1, ('_', '낮'): 1, ('낮', '음'): 1, ('음', '?'): 1, ('_', '마'): 1,
-                      ('마', '지'): 1, ('지', '막'): 1, ('_', '반'): 1, ('반', '전'): 1}
+                        ('_', '왜'): 1, ('_', '낮'): 1, ('낮', '음'): 1, ('음', '?'): 1, ('_', '마'): 1,
+                        ('마', '지'): 1, ('지', '막'): 1, ('_', '반'): 1, ('반', '전'): 1}
             """
             pairs = defaultdict(int)
-            raise NotImplementedError
+            for vocab_key, vocab_value in vocabs.items():
+                vocab_key_list = vocab_key.split()
+                
+                for i in range(len(vocab_key_list)-1):
+                    pairs[(vocab_key_list[i],vocab_key_list[i+1])] = vocab_value 
+                    
             return pairs
 
         def merge_vocab(pair, v_in):
@@ -160,7 +167,11 @@ class BytePairEncoder:
             [Caution] When you merge a pair, you have to check all items in vocabulary.
             """
             v_out = {}
-            raise NotImplementedError
+            for key, value in v_in.items():
+                if pair[0] + " " + pair[1] not in key:
+                    v_out[key] = value
+                    continue
+                v_out[key.replace(pair[0] + " " + pair[1], pair[0] + pair[1])] = value
             return v_out
 
         if self.verbose:
@@ -176,7 +187,16 @@ class BytePairEncoder:
             4. Merge the best pair in vocabs by using a merge_vocab function.
                and update vocabs.
             """
-            raise NotImplementedError
+            pairs = get_stats(vocabs)
+            if pairs is None:
+                break
+            max_tuple = max(pairs.items(), key=operator.itemgetter(1))
+            max_key = max_tuple[0]
+            # New vocab
+            vocabs = merge_vocab(max_key, vocabs)
+
+
+
 
         if self.verbose:
             print('\tTraining bpe was done')
@@ -352,20 +372,33 @@ def build_model(learning_rate,
     #   - You do not have to use all these classes.
     #   - My personal recommendation is a combination of MultiRnnCell/DropoutWrapper/GRUCell.
     #   - See https://www.tensorflow.org/versions/r1.14/api_docs/python/tf/nn/rnn_cell
-    fw_multi_cell: tf.nn.rnn_cell.MultiRNNCell = None
-    bw_multi_cell: tf.nn.rnn_cell.MultiRNNCell = None
+    fw_multi_cell: tf.nn.rnn_cell.MultiRNNCell = tf.nn.rnn_cell.MultiRNNCell([
+       tf.nn.rnn_cell.DropoutWrapper(
+    
+          tf.nn.rnn_cell.GRUCell(num_hidden)) for _ in range(num_lstm_cells)
+    ])
+    bw_multi_cell: tf.nn.rnn_cell.MultiRNNCell = tf.nn.rnn_cell.MultiRNNCell([
+       tf.nn.rnn_cell.DropoutWrapper(
+    
+          tf.nn.rnn_cell.GRUCell(num_hidden)) for _ in range(num_lstm_cells)
+    ])
 
     # Use a tf.nn.bidirectional_dynamic_rnn method.
     outputs, states = tf.nn.bidirectional_dynamic_rnn(fw_multi_cell, bw_multi_cell, embed, dtype='float32')
 
     # Concatenate outputs by using a tf.concat function.
-    raise NotImplementedError
+    # print("**********")
+    # print(outputs.shape)
+    outputs = tf.concat(outputs, axis=2)
+    # print(outputs.shape)
+    # print("**********")
+    # raise NotImplementedError
 
-    # Use only last output, [num_batches, max_len, 2*num_hidden] -> [num_batches, 2*num_hidden]
+    # Use only last output, [num_batches, max_len, num_hidden] -> [num_batches, num_hidden]
     outputs = tf.transpose(outputs, [1, 0, 2])[-1]
 
     # Build a fully-connected layer.
-    # [num_batches, 2*num_hidden] -> [num_batches, num_classes]
+    # [num_batches, num_embed] -> [num_batches, num_classes]
     weight = tf.Variable(tf.random_normal([num_hidden * 2, num_classes]))
     bias = tf.Variable(tf.random_normal([num_classes]))
     logits = tf.matmul(outputs, weight) + bias
